@@ -4,16 +4,17 @@
 
 ///////// CHANGEABLE VALUES /////////
 
-const char pompeii[] = "192.168.0.16";
-const int pompeiiPort = 28080;
+const char serverAddress[] = "home-monitoring.scaleys.co.uk";
+const int serverPort = 80;
+const int httpRequestDelay = 5000;
 
 const double minutesBetweenCalls = 1.0;
 
 ///////// CHANGEABLE VALUES ABOVE /////////
 
-EthernetClient pompeiiClient;
+EthernetClient ethernetClient;
 byte mac[] = {0x90, 0xA2, 0xDA, 0x0F, 0xA1, 0xCF};
-const char pompeiiService[] = "/aggregator/services/hot-water-display";
+const char serviceEndpoint[] = "/hotwater";
 const double millisecondsInAMinute = 60000.0;
 
 //LiquidCrystal lcd(12, 11, 5, 4, 3, 2);
@@ -59,24 +60,19 @@ void setup() {
 }
 
 void connectToEthernet() {
-  // attempt to connect to Wifi network:
   // start the Ethernet connection:
-  if (Ethernet.begin(mac) == 0) {
-    Serial.println("Failed to configure Ethernet using DHCP waiting 1 minute");
-    delay(millisecondsInAMinute);
+  bool connectedToNetwork = false;
+  while(!connectedToNetwork) {
+    Serial.println("Attempting to connect to network...");
 
-    if (Ethernet.begin(mac) == 0)
-    {
-      Serial.println("Failed to configure Ethernet using DHCP waiting 1 more minute");
-      delay(millisecondsInAMinute);
-
-      if (Ethernet.begin(mac) == 0) {
-        Serial.println("Failed to configure Ethernet using DHCP stopping - will need reset");
-        while(true);
-      }
+    if (Ethernet.begin(mac) == 0) {
+        Serial.println("Failed to connect, trying again...");
+    } else {
+        Serial.println("Connected successfully");
+        connectedToNetwork = true;
     }
-
   }
+
   // give the Ethernet shield a second to initialize:
   delay(1000);
   Serial.println("connecting...");
@@ -95,7 +91,7 @@ void loop() {
 }
 
 void displayData() {
-  String data = receiveDataFromPompeii();
+  String data = receiveDataFromServer();
 
   if(data.length() > 0) {
     
@@ -145,35 +141,32 @@ void displayData() {
   }
 }
 
-String receiveDataFromPompeii() {
-  Serial.println("Request data from Pompeii");
+String receiveDataFromServer() {
+  Serial.println("Request data from server");
 
   String response = "";
 
-  if (pompeiiClient.connect(pompeii, pompeiiPort)) {
-    Serial.println("connected to pompeii");
+  if (ethernetClient.connect(serverAddress, serverPort)) {
+    Serial.println("connected to server");
     // Make a HTTP request:
-    pompeiiClient.print("GET ");
-    pompeiiClient.print(pompeiiService);
-    pompeiiClient.println(" HTTP/1.1");
-    pompeiiClient.print("Host: ");
-    pompeiiClient.print(pompeii);
-    pompeiiClient.print(":");
-    pompeiiClient.println(pompeiiPort);
-    pompeiiClient.println("Accept: text/html, text/plain");
-    pompeiiClient.println("Pragma: no-cache");
-    pompeiiClient.println("Cache-Control: no-cache");
-    pompeiiClient.println("Connection: close");
-    pompeiiClient.println();
+    ethernetClient.print("GET ");
+    ethernetClient.print(serviceEndpoint);
+    ethernetClient.println(" HTTP/1.1");
+    ethernetClient.println("Host: " + String(serverAddress) + ":" + serverPort);
+    ethernetClient.println("Accept: text/html, text/plain");
+    ethernetClient.println("Pragma: no-cache");
+    ethernetClient.println("Cache-Control: no-cache");
+    ethernetClient.println("Connection: close");
+    ethernetClient.println();
 
-    Serial.println("Called pompeii");
-    delay(5000);
+    Serial.println("Called server");
+    delay(httpRequestDelay);
 
     String dataRead = "";
     boolean reachedData = false;
     
-    while (pompeiiClient.connected() || pompeiiClient.available()) {
-      char c = pompeiiClient.read();
+    while (ethernetClient.connected() || ethernetClient.available()) {
+      char c = ethernetClient.read();
       //Serial.print(c);
 
       if(reachedData) {
@@ -191,8 +184,8 @@ String receiveDataFromPompeii() {
 
     Serial.println("Finished reading data");
 
-    pompeiiClient.stop();
-    pompeiiClient.flush();
+    ethernetClient.stop();
+    ethernetClient.flush();
     Serial.println("Closed connection");
   }
 
